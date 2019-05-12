@@ -179,10 +179,11 @@ const SceneContent = ({
   const [XRControllers, setXRControllers] = useState({})
 
   const turnCamera = useRef(null)
-  const XRController1 = useRef(null)
-  const XRController2 = useRef(null)
+  const XRControllersRef = useRef({})
   const intersectArray = useRef([])
   const teleportArray = useRef([])
+
+  XRControllersRef.current = XRControllers
 
   const findParent = obj => {
     while (obj) {
@@ -205,6 +206,27 @@ const SceneContent = ({
 
     // TODO
     // controller.head = window.camera
+    
+    controller.addEventListener('trigger press began', onSelectStart)
+    controller.addEventListener('trigger press ended', onSelectEnd)
+    controller.addEventListener('grip press ended', onTeleport)
+    controller.addEventListener('thumbstick axes changed', onAxisChanged)
+
+    const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)])
+    const material = new THREE.LineBasicMaterial({
+      color: 0x0000ff
+    })
+    
+    const line = new THREE.Line(geometry, material)
+    line.name = 'line'
+    line.scale.z = 5
+    controller.add(line)
+
+    const raycastDepth = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.01, 0.01), new THREE.MeshBasicMaterial())
+    raycastDepth.visible = false
+    raycastDepth.name = 'raycast-depth'
+
+    controller.add(raycastDepth)
 
     controller.addEventListener('disconnected', function(event) {
       controller.parent.remove(controller)
@@ -227,25 +249,13 @@ const SceneContent = ({
   useRender(() => {
     THREE.VRController.update()
 
-    if (XRController1.current && XRController2.current) {
-      // cleanIntersected()
-      handleController(XRController1.current, 0)
-      handleController(XRController2.current, 1)
+    Object.values(XRControllersRef.current).forEach(controller => {
+      const object = controller.userData.selected
 
-      if (XRController1.current.userData.selected) {
-        const object = XRController1.current.userData.selected
-        if (object.userData.type === 'character') {
-          constraintObjectRotation(XRController1.current)
-        }
+      if (object && object.userData.type === 'character') {
+        constraintObjectRotation(controller)
       }
-
-      if (XRController2.current.userData.selected) {
-        const object = XRController2.current.userData.selected
-          if (object.userData.type === 'character') {
-            constraintObjectRotation(XRController2.current)
-          }
-        }
-    }
+    })
   })
 
   const constraintObjectRotation = controller => {
@@ -275,8 +285,10 @@ const SceneContent = ({
 
     if (intersect && intersect.distance < 10) {
       // console.log('try to teleport')
-      XRController1.current.dispatchEvent({ type: 'triggerup' })
-      XRController2.current.dispatchEvent({ type: 'triggerup' })
+
+      Object.values(XRControllers).forEach(controller => {
+        controller.dispatchEvent({ type: 'trigger press ended' })
+      })
 
       setTeleportPos(intersect.point)
     }
@@ -397,8 +409,9 @@ const SceneContent = ({
     if (turnCamera.current) return 
   
     if (event.axes[0] > 0.075) {
-      XRController1.current.dispatchEvent({ type: 'triggerup' })
-      XRController2.current.dispatchEvent({ type: 'triggerup' })
+      Object.values(XRControllers).forEach(controller => {
+        controller.dispatchEvent({ type: 'trigger press ended' })
+      })
 
       turnCamera.current = 'Right'
       setCamExtraRot(oldRot => {
@@ -407,8 +420,9 @@ const SceneContent = ({
     }
     
     if (event.axes[0] < -0.075) {
-      XRController1.current.dispatchEvent({ type: 'triggerup' })
-      XRController2.current.dispatchEvent({ type: 'triggerup' })
+      Object.values(XRControllers).forEach(controller => {
+        controller.dispatchEvent({ type: 'trigger press ended' })
+      })
 
       turnCamera.current = 'Left'
       setCamExtraRot(oldRot => {
@@ -440,50 +454,10 @@ const SceneContent = ({
         if (displays.length) {
           renderer.current = gl
           scene.background = new THREE.Color(world.backgroundColor)
-          setIsXR(true)
-          // console.log('isXR is now', isXR)
-          if (!XRController1.current && !XRController2.current) {
-            document.body.appendChild(WEBVR.createButton(gl))
-            gl.vr.enabled = true
+          setIsXR(true)          
 
-            // XRController1 = renderer.current.vr.getController(0)
-            XRController1.current = new THREE.ViveController( 0 );
-            XRController1.current.standingMatrix = gl.vr.getStandingMatrix()
-
-            XRController1.current.addEventListener('triggerdown', onSelectStart)
-            XRController1.current.addEventListener('triggerup', onSelectEnd)
-            XRController1.current.addEventListener('gripsdown', onTeleport)
-            XRController1.current.addEventListener('axischanged', onAxisChanged)
-
-            // XRController2.current = renderer.current.vr.getController(1)
-            XRController2.current = new THREE.ViveController(1)
-            XRController2.current.standingMatrix = gl.vr.getStandingMatrix()
-
-            XRController2.current.addEventListener('triggerdown', onSelectStart)
-            XRController2.current.addEventListener('triggerup', onSelectEnd)
-            XRController2.current.addEventListener('gripsdown', onTeleport)
-            XRController2.current.addEventListener('axischanged', onAxisChanged)
-
-            const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)])
-            const material = new THREE.LineBasicMaterial({
-              color: 0x0000ff
-            })
-            
-            const line = new THREE.Line(geometry, material)
-            line.name = 'line'
-            line.scale.z = 5
-            XRController1.current.add(line.clone())
-            XRController2.current.add(line.clone())
-
-            const raycastDepth = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.01, 0.01), new THREE.MeshBasicMaterial())
-            raycastDepth.visible = false
-            raycastDepth.name = 'raycast-depth'
-
-            XRController1.current.add(raycastDepth.clone())
-            XRController2.current.add(raycastDepth.clone())
-          }
-          // console.log('controllers', XRController1.current, XRController2.current)
-
+          document.body.appendChild(WEBVR.createButton(gl))
+          gl.vr.enabled = true
         }
       })
       .catch(err => console.error(err))
