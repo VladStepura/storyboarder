@@ -161,84 +161,6 @@ const useAttachmentLoader = ({ sceneObjects, world }) => {
   return attachments
 }
 
-const useVRControllers = () => {
-  const { gl } = useThree()
-  const controllers = useRef({})
-  
-  const onVRControllerConnected = event => {
-    let id = THREE.Math.generateUUID()
-  
-    let controller = event.detail
-    controller.standingMatrix = gl.vr.getStandingMatrix()
-  
-    // TODO
-    // controller.head = window.camera
-  
-    let meshColorOff = 0xDB3236 // Red.
-    let meshColorOn  = 0xF4C20D // Yellow.
-
-    let controllerMaterial = new THREE.MeshStandardMaterial({
-      color: meshColorOff
-    })
-    let controllerMesh = new THREE.Mesh(
-      new THREE.CylinderGeometry( 0.005, 0.05, 0.1, 6 ),
-      controllerMaterial
-    )
-    let handleMesh = new THREE.Mesh(
-      new THREE.BoxGeometry( 0.03, 0.1, 0.03 ),
-      controllerMaterial
-    )
-
-    let applyDown = function( obj, key, value ) {
-    	obj[ key ] = value
-      if( obj.children !== undefined && obj.children.length > 0 ){
-        obj.children.forEach( function( child ) {
-          applyDown( child, key, value )
-        })
-      }
-    }
-    let castShadows = function( obj ) {
-      applyDown( obj, 'castShadow', true )
-    }
-    let receiveShadows = function( obj ) {
-      applyDown( obj, 'receiveShadow', true )
-    }
-
-    controllerMaterial.flatShading = true
-    controllerMesh.rotation.x = -Math.PI / 2
-    handleMesh.position.y = -0.05
-    controllerMesh.add( handleMesh )
-    controller.userData.mesh = controllerMesh //  So we can change the color later
-    controller.add( controllerMesh )
-    castShadows( controller )
-    receiveShadows( controller )
-
-    controller.addEventListener( 'primary press began', function( event ) {
-      event.target.userData.mesh.material.color.setHex( meshColorOn )
-    })
-    controller.addEventListener( 'primary press ended', function( event ) {
-      event.target.userData.mesh.material.color.setHex( meshColorOff )
-    })
-    controller.addEventListener( 'disconnected', function( event ){    
-      controller.parent.remove( controller )
-      delete controllers.current[id]
-    })
-
-    controllers.current[id] = controller
-  }
-
-  useEffect(() => {
-    window.addEventListener("vr controller connected", onVRControllerConnected)
-    return () => 
-      window.removeEventListener("vr controller connected", onVRControllerConnected)
-  }, [])
-  
-  useRender(() => {
-    THREE.VRController.update()
-  })
-
-  return controllers.current
-}
 
 const SceneContent = ({
   aspectRatio,
@@ -254,6 +176,7 @@ const SceneContent = ({
   const [isXR, setIsXR] = useState(false)
   const [camExtraRot, setCamExtraRot] = useState(0)
   const [teleportPos, setTeleportPos] = useState(null)
+  const [XRControllers, setXRControllers] = useState({})
 
   const turnCamera = useRef(null)
   const XRController1 = useRef(null)
@@ -274,9 +197,76 @@ const SceneContent = ({
 
   const { gl, scene, camera, setDefaultCamera } = useThree()
 
+  const onVRControllerConnected = event => {
+    let id = THREE.Math.generateUUID()
 
+    let controller = event.detail
+    controller.standingMatrix = gl.vr.getStandingMatrix()
+
+    // TODO
+    // controller.head = window.camera
+
+    let meshColorOff = 0xdb3236 // Red.
+    let meshColorOn = 0xf4c20d // Yellow.
+
+    let controllerMaterial = new THREE.MeshStandardMaterial({
+      color: meshColorOff
+    })
+    let controllerMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.05, 0.1, 6), controllerMaterial)
+    let handleMesh = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.1, 0.03), controllerMaterial)
+
+    let applyDown = function(obj, key, value) {
+      obj[key] = value
+      if (obj.children !== undefined && obj.children.length > 0) {
+        obj.children.forEach(function(child) {
+          applyDown(child, key, value)
+        })
+      }
+    }
+    let castShadows = function(obj) {
+      applyDown(obj, 'castShadow', true)
+    }
+    let receiveShadows = function(obj) {
+      applyDown(obj, 'receiveShadow', true)
+    }
+
+    controllerMaterial.flatShading = true
+    controllerMesh.rotation.x = -Math.PI / 2
+    handleMesh.position.y = -0.05
+    controllerMesh.add(handleMesh)
+    controller.userData.mesh = controllerMesh //  So we can change the color later
+    controller.add(controllerMesh)
+    castShadows(controller)
+    receiveShadows(controller)
+
+    controller.addEventListener('primary press began', function(event) {
+      event.target.userData.mesh.material.color.setHex(meshColorOn)
+    })
+    controller.addEventListener('primary press ended', function(event) {
+      event.target.userData.mesh.material.color.setHex(meshColorOff)
+    })
+
+    controller.addEventListener('disconnected', function(event) {
+      controller.parent.remove(controller)
+
+      // Try if this works as expected?
+      const { id, ...controllers } = XRControllers
+      setXRControllers(controllers)
+    })
+
+    setXRControllers(prev => {
+      return {...prev, [id]: controller}
+    })
+  }
+
+  useEffect(() => {
+    window.addEventListener('vr controller connected', onVRControllerConnected)
+    return () => window.removeEventListener('vr controller connected', onVRControllerConnected)
+  }, [])
 
   useRender(() => {
+    THREE.VRController.update()
+
     if (XRController1.current && XRController2.current) {
       // cleanIntersected()
       handleController(XRController1.current, 0)
@@ -566,8 +556,6 @@ const SceneContent = ({
 
   let cameraState = sceneObjects[activeCamera]
 
-  const vrControllers = useVRControllers()
-
   let activeCameraComponent = (
     <group
       key={'camera'}
@@ -595,8 +583,8 @@ const SceneContent = ({
           <SGModel {...{ modelData: getModelData(controllerObjectSettings), ...controllerObjectSettings }} />
         </primitive>
       )}
-      {Object.values(vrControllers).map((object, n) => {
-        return <primitive key={n} object={object}/>
+      {Object.values(XRControllers).map((object, n) => {
+        return <primitive key={n} object={object} />
       })}
     </group>
   )
