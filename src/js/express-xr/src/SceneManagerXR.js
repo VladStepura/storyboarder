@@ -206,46 +206,6 @@ const SceneContent = ({
     // TODO
     // controller.head = window.camera
 
-    let meshColorOff = 0xdb3236 // Red.
-    let meshColorOn = 0xf4c20d // Yellow.
-
-    let controllerMaterial = new THREE.MeshStandardMaterial({
-      color: meshColorOff
-    })
-    let controllerMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.05, 0.1, 6), controllerMaterial)
-    let handleMesh = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.1, 0.03), controllerMaterial)
-
-    let applyDown = function(obj, key, value) {
-      obj[key] = value
-      if (obj.children !== undefined && obj.children.length > 0) {
-        obj.children.forEach(function(child) {
-          applyDown(child, key, value)
-        })
-      }
-    }
-    let castShadows = function(obj) {
-      applyDown(obj, 'castShadow', true)
-    }
-    let receiveShadows = function(obj) {
-      applyDown(obj, 'receiveShadow', true)
-    }
-
-    controllerMaterial.flatShading = true
-    controllerMesh.rotation.x = -Math.PI / 2
-    handleMesh.position.y = -0.05
-    controllerMesh.add(handleMesh)
-    controller.userData.mesh = controllerMesh //  So we can change the color later
-    controller.add(controllerMesh)
-    castShadows(controller)
-    receiveShadows(controller)
-
-    controller.addEventListener('primary press began', function(event) {
-      event.target.userData.mesh.material.color.setHex(meshColorOn)
-    })
-    controller.addEventListener('primary press ended', function(event) {
-      event.target.userData.mesh.material.color.setHex(meshColorOff)
-    })
-
     controller.addEventListener('disconnected', function(event) {
       controller.parent.remove(controller)
 
@@ -571,20 +531,13 @@ const SceneContent = ({
     >
       <SGCamera {...{ aspectRatio, activeCamera, setDefaultCamera, ...cameraState }} />
 
-      {XRController1.current && (
-        <primitive object={XRController1.current}>
-          <GUI {...{ aspectRatio }} />
-          <SGModel {...{ modelData: getModelData(controllerObjectSettings), ...controllerObjectSettings }} />
-        </primitive>
-      )}
-      {XRController2.current && (
-        <primitive object={XRController2.current}>
-          <GUI {...{ aspectRatio }} />
-          <SGModel {...{ modelData: getModelData(controllerObjectSettings), ...controllerObjectSettings }} />
-        </primitive>
-      )}
       {Object.values(XRControllers).map((object, n) => {
-        return <primitive key={n} object={object} />
+        return (
+          <primitive key={n} object={object}>
+            <GUI {...{ aspectRatio }} />
+            <SGModel {...{ modelData: getModelData(controllerObjectSettings), ...controllerObjectSettings }} />
+          </primitive>
+        )
       })}
     </group>
   )
